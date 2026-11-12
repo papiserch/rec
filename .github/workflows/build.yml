@@ -1,0 +1,48 @@
+name: Build CS-90
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore CS90.sln
+
+      - name: Build
+        run: dotnet build CS90.sln -c Release --no-restore
+
+      - name: Publish (win-x64, self-contained, single file)
+        run: >
+          dotnet publish src/CS90/CS90.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None -p:DebugSymbols=false
+          -o publish
+
+      - name: Create portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item README.md publish/README.md
+          Compress-Archive -Path publish/* -DestinationPath artifacts/CS90-portable-win-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CS90-portable-win-x64
+          path: artifacts/CS90-portable-win-x64.zip
+          if-no-files-found: error
